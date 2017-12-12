@@ -10,12 +10,18 @@ import json
 from pathlib import Path
 from argparse import ArgumentParser
 from os import scandir
+from multiprocessing.pool import ThreadPool
+
 
 def rscandir(path):
     for entry in scandir(path):
         yield Path(entry.path)
         if entry.is_dir():
             yield from rscandir(entry.path)
+
+
+def srscandir(path):
+    return set(x for x in rscandir(path))
 
 
 def main():
@@ -26,15 +32,14 @@ def main():
     )
     args = parser.parse_args()
 
-    listings = {x: set() for x in args.paths}
-    relative_listings = {x: set() for x in args.paths}
-
     print("Gathering abspaths...")
-    for abspath in listings:
-        for node in rscandir(abspath):
-            listings[abspath].add(node)
+    # 10 is arbitrary, test later <--- #TODO
+    pool = ThreadPool(min(len(args.paths), 10))
+    file_lists = pool.map(srscandir, args.paths)
+    listings = {args.paths[x]: file_lists[x] for x in range(len(args.paths))}
 
     print("Relativizing paths...")
+    relative_listings = {x: set() for x in listings}
     for abspath in listings:
         for nodepath in listings[abspath]:
             relative_listings[abspath].add(Path(nodepath).relative_to(abspath))
@@ -88,6 +93,7 @@ def main():
             )
         )
     )
+
 
 if __name__ == '__main__':
     main()
